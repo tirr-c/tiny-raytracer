@@ -3,10 +3,32 @@ use nalgebra as na;
 use na::Vector3;
 
 #[derive(Debug, Clone)]
-pub enum Material {
-    Color {
+pub struct Material {
+    kind: MaterialKind,
+    specular_exp: f32,
+    albedo_diffuse: f32,
+    albedo_specular: f32,
+}
+
+#[derive(Debug, Clone)]
+pub enum MaterialKind {
+    Color([f32; 3]),
+}
+
+impl Material {
+    pub const fn color(
         diffuse: [f32; 3],
-    },
+        specular_exp: f32,
+        albedo_diffuse: f32,
+        albedo_specular: f32,
+    ) -> Self {
+        Self {
+            kind: MaterialKind::Color(diffuse),
+            specular_exp,
+            albedo_diffuse,
+            albedo_specular,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -25,22 +47,20 @@ pub trait Object {
 pub struct Sphere {
     center: Vector3<f32>,
     radius: f32,
-    diffuse: [f32; 3],
+    material: Material,
 }
 
 impl Sphere {
-    pub fn new(center: Vector3<f32>, radius: f32, diffuse: [f32; 3]) -> Self {
+    pub fn new(center: Vector3<f32>, radius: f32, material: Material) -> Self {
         Self {
             center,
             radius,
-            diffuse,
+            material,
         }
     }
 
     fn material(&self) -> Material {
-        Material::Color {
-            diffuse: self.diffuse,
-        }
+        self.material.clone()
     }
 }
 
@@ -90,6 +110,10 @@ impl Light {
     }
 }
 
+fn reflect(a: Vector3<f32>, n: Vector3<f32>) -> Vector3<f32> {
+    a - a.dot(&n) * 2.0 * n
+}
+
 pub fn scene_intersect(
     orig: Vector3<f32>,
     dir: Vector3<f32>,
@@ -104,6 +128,7 @@ pub fn scene_intersect(
     intersections
         .pop()
         .map(|info| {
+            let dir = dir.normalize();
             let diffuse_intensity: f32 = lights
                 .iter()
                 .map(|light| {
@@ -111,9 +136,30 @@ pub fn scene_intersect(
                     light.intensity * f32::max(0.0, light_dir.dot(&info.normal))
                 })
                 .sum();
-            match info.material {
-                Material::Color { diffuse } => {
-                    let color_vec = Vector3::from(diffuse) * diffuse_intensity;
+            let specular_intensity: f32 = lights
+                .iter()
+                .map(|light| {
+                    let light_dir = (light.position - info.hit).normalize();
+                    let reflect_dir = reflect(light_dir, info.normal);
+                    let angle = f32::max(0.0, reflect_dir.dot(&dir));
+                    light.intensity * f32::powf(angle, info.material.specular_exp)
+                })
+                .sum();
+            match info.material.kind {
+                MaterialKind::Color(diffuse) => {
+                    let diffuse_color_vec =
+                        Vector3::from(diffuse) *
+                        diffuse_intensity *
+                        info.material.albedo_diffuse;
+                    let specular_color_vec =
+                        Vector3::from([1.0, 1.0, 1.0]) *
+                        specular_intensity *
+                        info.material.albedo_specular;
+                    let mut color_vec = diffuse_color_vec + specular_color_vec;
+                    let max = color_vec.max();
+                    if max > 1.0 {
+                        color_vec /= max;
+                    }
                     color_vec.into()
                 },
             }

@@ -2,13 +2,13 @@ use nalgebra as na;
 
 use na::Vector3;
 use rayon::prelude::*;
-use tiny_raytracer::object::{self, Light, Sphere};
+use tiny_raytracer::{object::{self, Light, Sphere}, Material};
 
 const WIDTH: usize = 1024;
 const HEIGHT: usize = 768;
 
-const IVORY: [f32; 3] = [0.4, 0.4, 0.3];
-const RED_RUBBER: [f32; 3] = [0.3, 0.1, 0.1];
+const IVORY: Material = Material::color([0.4, 0.4, 0.3], 50.0, 0.6, 0.3);
+const RED_RUBBER: Material = Material::color([0.3, 0.1, 0.1], 10.0, 0.9, 0.1);
 
 fn main() -> Result<(), failure::Error> {
     let mut framebuffer = tiny_raytracer::Framebuffer::new(WIDTH, HEIGHT);
@@ -20,7 +20,9 @@ fn main() -> Result<(), failure::Error> {
         Sphere::new(Vector3::from([ 7.0,  5.0, -18.0]), 4.0, IVORY),
     ];
     let lights = [
-        Light::new(Vector3::from([-20.0, 20.0, 20.0]), 1.5),
+        Light::new(Vector3::from([-20.0, 20.0,  20.0]), 1.5),
+        Light::new(Vector3::from([ 30.0, 50.0, -25.0]), 1.0),
+        Light::new(Vector3::from([ 30.0, 20.0,  30.0]), 1.7),
     ];
 
     let wf = WIDTH as f32;
