@@ -4,32 +4,56 @@ use na::Vector3;
 
 #[derive(Debug, Clone)]
 pub struct Material {
-    kind: MaterialKind,
+    diffuse: Option<Diffuse>,
+    specular: Option<Specular>,
+    reflect: Option<f32>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Specular {
     specular_exp: f32,
-    albedo_diffuse: f32,
-    albedo_specular: f32,
-    albedo_reflect: f32,
+    albedo: f32,
 }
 
 #[derive(Debug, Clone)]
-pub enum MaterialKind {
+pub struct Diffuse {
+    kind: DiffuseKind,
+    albedo: f32,
+}
+
+#[derive(Debug, Clone)]
+pub enum DiffuseKind {
     Color([f32; 3]),
 }
 
 impl Material {
-    pub const fn color(
-        diffuse: [f32; 3],
-        specular_exp: f32,
-        albedo_diffuse: f32,
-        albedo_specular: f32,
-        albedo_reflect: f32,
-    ) -> Self {
+    pub const fn none() -> Self {
         Self {
-            kind: MaterialKind::Color(diffuse),
-            specular_exp,
-            albedo_diffuse,
-            albedo_specular,
-            albedo_reflect,
+            diffuse: None,
+            specular: None,
+            reflect: None,
+        }
+    }
+
+    pub const fn color(diffuse: [f32; 3], albedo: f32) -> Self {
+        Self {
+            diffuse: Some(Diffuse { kind: DiffuseKind::Color(diffuse), albedo }),
+            specular: None,
+            reflect: None,
+        }
+    }
+
+    pub const fn with_specular(self, specular_exp: f32, albedo: f32) -> Self {
+        Self {
+            specular: Some(Specular { specular_exp, albedo }),
+            ..self
+        }
+    }
+
+    pub const fn with_reflect(self, albedo: f32) -> Self {
+        Self {
+            reflect: Some(albedo),
+            ..self
         }
     }
 }
@@ -137,8 +161,8 @@ pub fn render_scene(
     lights: &[Light],
     recursion_limit: u32,
 ) -> [f32; 3] {
-    let intersection = test_scene_intersect(orig, dir, spheres);
-    intersection
+    if recursion_limit == 0 { None } else { Some(()) }
+        .and_then(|_| test_scene_intersect(orig, dir, spheres))
         .and_then(|info| {
             let dir = dir.normalize();
             let filtered_lights: Vec<_> = lights
@@ -161,52 +185,60 @@ pub fn render_scene(
                 })
                 .collect();
 
-            let diffuse_intensity: f32 = filtered_lights
-                .iter()
-                .map(|(light_dir, light)| {
-                    light.intensity * f32::max(0.0, light_dir.dot(&info.normal))
-                })
-                .sum();
-            let specular_intensity: f32 = filtered_lights
-                .iter()
-                .map(|(light_dir, light)| {
-                    let reflect_dir = reflect(light_dir.clone(), info.normal);
-                    let angle = f32::max(0.0, reflect_dir.dot(&dir));
-                    light.intensity * f32::powf(angle, info.material.specular_exp)
-                })
-                .sum();
-            match info.material.kind {
-                MaterialKind::Color(diffuse) => {
-                    let diffuse_color_vec =
-                        Vector3::from(diffuse) *
-                        diffuse_intensity *
-                        info.material.albedo_diffuse;
-                    let specular_color_vec =
-                        Vector3::from([1.0, 1.0, 1.0]) *
-                        specular_intensity *
-                        info.material.albedo_specular;
-                    let raw_reflect_color = if recursion_limit == 0 {
-                        return None;
-                    } else {
-                        let reflect_dir = reflect(dir, info.normal);
-                        let reflect_orig = if reflect_dir.dot(&info.normal).is_sign_negative() {
-                            info.hit - info.normal * 1e-3
-                        } else {
-                            info.hit + info.normal * 1e-3
-                        };
-                        render_scene(reflect_orig, reflect_dir, spheres, lights, recursion_limit - 1)
+            let diffuse_color_vec =
+                if let Some(Diffuse { kind, albedo }) = &info.material.diffuse {
+                    let diffuse_intensity: f32 = filtered_lights
+                        .iter()
+                        .map(|(light_dir, light)| {
+                            light.intensity * f32::max(0.0, light_dir.dot(&info.normal))
+                        })
+                        .sum();
+                    let raw_diffuse_color = match kind {
+                        DiffuseKind::Color(diffuse) => diffuse.clone(),
                     };
-                    let reflect_color_vec =
-                        Vector3::from(raw_reflect_color) *
-                        info.material.albedo_reflect;
-                    let mut color_vec = diffuse_color_vec + specular_color_vec + reflect_color_vec;
-                    let max = color_vec.max();
-                    if max > 1.0 {
-                        color_vec /= max;
-                    }
-                    Some(color_vec.into())
-                },
+                    Vector3::from(raw_diffuse_color) * diffuse_intensity * *albedo
+                } else {
+                    Vector3::from([0.0, 0.0, 0.0])
+                };
+            let specular_color_vec =
+                if let Some(Specular { specular_exp, albedo }) = info.material.specular {
+                    let specular_intensity: f32 = filtered_lights
+                        .iter()
+                        .map(|(light_dir, light)| {
+                            let reflect_dir = reflect(light_dir.clone(), info.normal);
+                            let angle = f32::max(0.0, reflect_dir.dot(&dir));
+                            light.intensity * f32::powf(angle, specular_exp)
+                        })
+                        .sum();
+                    Vector3::from([1.0, 1.0, 1.0]) * specular_intensity * albedo
+                } else {
+                    Vector3::from([0.0, 0.0, 0.0])
+                };
+            let reflect_color_vec =
+                if let Some(albedo_reflect) = info.material.reflect {
+                    let reflect_dir = reflect(dir, info.normal);
+                    let reflect_orig = if reflect_dir.dot(&info.normal).is_sign_negative() {
+                        info.hit - info.normal * 1e-3
+                    } else {
+                        info.hit + info.normal * 1e-3
+                    };
+                    let raw_reflect_color = render_scene(
+                        reflect_orig,
+                        reflect_dir,
+                        spheres,
+                        lights,
+                        recursion_limit - 1,
+                    );
+                    Vector3::from(raw_reflect_color) * albedo_reflect
+                } else {
+                    Vector3::from([0.0, 0.0, 0.0])
+                };
+            let mut color_vec = diffuse_color_vec + specular_color_vec + reflect_color_vec;
+            let max = color_vec.max();
+            if max > 1.0 {
+                color_vec /= max;
             }
+            Some(color_vec.into())
         })
         .unwrap_or([0.2, 0.7, 0.8])
 }

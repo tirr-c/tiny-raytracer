@@ -7,9 +7,9 @@ use tiny_raytracer::{object::{self, Light, Sphere}, Material};
 const WIDTH: usize = 1024;
 const HEIGHT: usize = 768;
 
-const IVORY: Material = Material::color([0.4, 0.4, 0.3], 50.0, 0.6, 0.3, 0.1);
-const RED_RUBBER: Material = Material::color([0.3, 0.1, 0.1], 10.0, 0.9, 0.1, 0.0);
-const MIRROR: Material = Material::color([1.0, 1.0, 1.0], 1425.0, 0.0, 10.0, 0.8);
+const IVORY: Material = Material::color([0.4, 0.4, 0.3], 0.6).with_specular(50.0, 0.3).with_reflect(0.1);
+const RED_RUBBER: Material = Material::color([0.3, 0.1, 0.1], 0.9).with_specular(10.0, 0.1);
+const MIRROR: Material = Material::none().with_specular(1425.0, 10.0).with_reflect(0.8);
 
 fn main() -> Result<(), failure::Error> {
     let mut framebuffer = tiny_raytracer::Framebuffer::new(WIDTH, HEIGHT);
