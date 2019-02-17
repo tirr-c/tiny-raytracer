@@ -114,33 +114,59 @@ fn reflect(a: Vector3<f32>, n: Vector3<f32>) -> Vector3<f32> {
     a - a.dot(&n) * 2.0 * n
 }
 
+pub fn test_scene_intersect(
+    orig: Vector3<f32>,
+    dir: Vector3<f32>,
+    spheres: &[Sphere],
+) -> Option<IntersectionInfo> {
+    let mut intersections: Vec<_> = spheres
+        .iter()
+        .filter_map(move |sphere| sphere.ray_intersect(orig, dir))
+        .collect();
+    intersections.sort_unstable_by(|a, b| b.dist.partial_cmp(&a.dist).unwrap());
+    intersections.pop()
+}
+
 pub fn scene_intersect(
     orig: Vector3<f32>,
     dir: Vector3<f32>,
     spheres: &[Sphere],
     lights: &[Light],
 ) -> Option<[f32; 3]> {
-    let mut intersections: Vec<_> = spheres
-        .iter()
-        .filter_map(move |sphere| sphere.ray_intersect(orig, dir))
-        .collect();
-    intersections.sort_unstable_by(|a, b| b.dist.partial_cmp(&a.dist).unwrap());
-    intersections
-        .pop()
+    let intersection = test_scene_intersect(orig, dir, spheres);
+    intersection
         .map(|info| {
             let dir = dir.normalize();
-            let diffuse_intensity: f32 = lights
+            let filtered_lights: Vec<_> = lights
                 .iter()
-                .map(|light| {
-                    let light_dir = (light.position - info.hit).normalize();
+                .filter_map(|light| {
+                    let raw_light_dir = light.position - info.hit;
+                    let light_dir = raw_light_dir.normalize();
+                    let light_dist = raw_light_dir.norm();
+
+                    let shadow_orig = if light_dir.dot(&info.normal).is_sign_negative() {
+                        info.hit - info.normal * 1e-3
+                    } else {
+                        info.hit + info.normal * 1e-3
+                    };
+                    let shadow_info = test_scene_intersect(shadow_orig, light_dir, spheres);
+                    match &shadow_info {
+                        Some(shadow_info) if shadow_info.dist < light_dist => None,
+                        _ => Some((light_dir, light)),
+                    }
+                })
+                .collect();
+
+            let diffuse_intensity: f32 = filtered_lights
+                .iter()
+                .map(|(light_dir, light)| {
                     light.intensity * f32::max(0.0, light_dir.dot(&info.normal))
                 })
                 .sum();
-            let specular_intensity: f32 = lights
+            let specular_intensity: f32 = filtered_lights
                 .iter()
-                .map(|light| {
-                    let light_dir = (light.position - info.hit).normalize();
-                    let reflect_dir = reflect(light_dir, info.normal);
+                .map(|(light_dir, light)| {
+                    let reflect_dir = reflect(light_dir.clone(), info.normal);
                     let angle = f32::max(0.0, reflect_dir.dot(&dir));
                     light.intensity * f32::powf(angle, info.material.specular_exp)
                 })
