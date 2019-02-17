@@ -75,11 +75,47 @@ impl Object for Sphere {
     }
 }
 
-pub fn scene_intersect(orig: Vector3<f32>, dir: Vector3<f32>, spheres: &[Sphere]) -> Option<IntersectionInfo> {
+#[derive(Debug, Clone)]
+pub struct Light {
+    position: Vector3<f32>,
+    intensity: f32,
+}
+
+impl Light {
+    pub fn new(position: Vector3<f32>, intensity: f32) -> Self {
+        Self {
+            position,
+            intensity,
+        }
+    }
+}
+
+pub fn scene_intersect(
+    orig: Vector3<f32>,
+    dir: Vector3<f32>,
+    spheres: &[Sphere],
+    lights: &[Light],
+) -> Option<[f32; 3]> {
     let mut intersections: Vec<_> = spheres
         .iter()
         .filter_map(move |sphere| sphere.ray_intersect(orig, dir))
         .collect();
     intersections.sort_unstable_by(|a, b| b.dist.partial_cmp(&a.dist).unwrap());
-    intersections.pop()
+    intersections
+        .pop()
+        .map(|info| {
+            let diffuse_intensity: f32 = lights
+                .iter()
+                .map(|light| {
+                    let light_dir = (light.position - info.hit).normalize();
+                    light.intensity * f32::max(0.0, light_dir.dot(&info.normal))
+                })
+                .sum();
+            match info.material {
+                Material::Color { diffuse } => {
+                    let color_vec = Vector3::from(diffuse) * diffuse_intensity;
+                    color_vec.into()
+                },
+            }
+        })
 }

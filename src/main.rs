@@ -2,7 +2,7 @@ use nalgebra as na;
 
 use na::Vector3;
 use rayon::prelude::*;
-use tiny_raytracer::{object::{self, Sphere}, Material};
+use tiny_raytracer::object::{self, Light, Sphere};
 
 const WIDTH: usize = 1024;
 const HEIGHT: usize = 768;
@@ -19,10 +19,13 @@ fn main() -> Result<(), failure::Error> {
         Sphere::new(Vector3::from([ 1.5, -0.5, -18.0]), 3.0, RED_RUBBER),
         Sphere::new(Vector3::from([ 7.0,  5.0, -18.0]), 4.0, IVORY),
     ];
+    let lights = [
+        Light::new(Vector3::from([-20.0, 20.0, 20.0]), 1.5),
+    ];
 
     let wf = WIDTH as f32;
     let hf = HEIGHT as f32;
-    let fov_half = std::f32::consts::PI / 4.0;
+    let fov_half = std::f32::consts::PI / 6.0;
     let fov_tan = f32::tan(fov_half);
 
     framebuffer.render_with(|| {
@@ -36,14 +39,8 @@ fn main() -> Result<(), failure::Error> {
                 let x = (2.0 * (cf + 0.5) / wf - 1.0) * fov_tan * wf / hf;
                 let y = -(2.0 * (rf + 0.5) / hf - 1.0) * fov_tan;
                 let dir = Vector3::from([x, y, -1.0]);
-                let info = object::scene_intersect(na::zero(), dir, &spheres);
-                if let Some(info) = info {
-                    match info.material {
-                        Material::Color { diffuse } => diffuse,
-                    }
-                } else {
-                    [0.2, 0.7, 0.8]
-                }
+                let info = object::scene_intersect(na::zero(), dir, &spheres, &lights);
+                info.unwrap_or([0.2, 0.7, 0.8])
             })
             .collect()
     });
