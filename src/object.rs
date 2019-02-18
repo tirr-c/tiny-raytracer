@@ -1,6 +1,7 @@
 use nalgebra as na;
 
 use na::Vector3;
+use crate::math::{reflect, refract};
 
 #[derive(Debug, Clone)]
 pub struct Material {
@@ -8,12 +9,6 @@ pub struct Material {
     specular: Option<Specular>,
     reflect: Option<f32>,
     refract: Option<Refract>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Specular {
-    specular_exp: f32,
-    albedo: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -25,6 +20,12 @@ pub struct Diffuse {
 #[derive(Debug, Clone)]
 pub enum DiffuseKind {
     Color([f32; 3]),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Specular {
+    specular_exp: f32,
+    albedo: f32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -150,25 +151,6 @@ impl Light {
             position,
             intensity,
         }
-    }
-}
-
-fn reflect(a: Vector3<f32>, n: Vector3<f32>) -> Vector3<f32> {
-    a - a.dot(&n) * 2.0 * n
-}
-
-fn refract(i: Vector3<f32>, n: Vector3<f32>, ni: f32, nr: f32) -> Vector3<f32> {
-    let cos_i = -i.dot(&n);
-    if cos_i.is_sign_negative() {
-        return refract(i, -n, nr, ni);
-    }
-    let eta = ni / nr;
-    let cos_r_sq = 1.0 - eta * eta * (1.0 - cos_i * cos_i);
-    if cos_r_sq.is_sign_negative() {
-        // total reflection
-        -reflect(i, n)
-    } else {
-        i * eta + n * (eta * cos_i - f32::sqrt(cos_r_sq))
     }
 }
 

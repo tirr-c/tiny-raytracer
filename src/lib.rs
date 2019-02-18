@@ -1,5 +1,6 @@
 mod error;
 mod framebuffer;
+mod math;
 pub mod object;
 
 pub use self::error::RenderError;
