@@ -7,6 +7,7 @@ pub struct Material {
     diffuse: Option<Diffuse>,
     specular: Option<Specular>,
     reflect: Option<f32>,
+    refract: Option<Refract>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -26,12 +27,19 @@ pub enum DiffuseKind {
     Color([f32; 3]),
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Refract {
+    index: f32,
+    albedo: f32,
+}
+
 impl Material {
     pub const fn none() -> Self {
         Self {
             diffuse: None,
             specular: None,
             reflect: None,
+            refract: None,
         }
     }
 
@@ -40,6 +48,7 @@ impl Material {
             diffuse: Some(Diffuse { kind: DiffuseKind::Color(diffuse), albedo }),
             specular: None,
             reflect: None,
+            refract: None,
         }
     }
 
@@ -53,6 +62,13 @@ impl Material {
     pub const fn with_reflect(self, albedo: f32) -> Self {
         Self {
             reflect: Some(albedo),
+            ..self
+        }
+    }
+
+    pub const fn with_refract(self, index: f32, albedo: f32) -> Self {
+        Self {
+            refract: Some(Refract { index, albedo }),
             ..self
         }
     }
@@ -140,6 +156,23 @@ impl Light {
 fn reflect(a: Vector3<f32>, n: Vector3<f32>) -> Vector3<f32> {
     a - a.dot(&n) * 2.0 * n
 }
+
+fn refract(i: Vector3<f32>, n: Vector3<f32>, ni: f32, nr: f32) -> Vector3<f32> {
+    let cos_i = -i.dot(&n);
+    if cos_i.is_sign_negative() {
+        return refract(i, -n, nr, ni);
+    }
+    let eta = ni / nr;
+    let cos_r_sq = 1.0 - eta * eta * (1.0 - cos_i * cos_i);
+    if cos_r_sq.is_sign_negative() {
+        // total reflection
+        -reflect(i, n)
+    } else {
+        i * eta + n * (eta * cos_i - f32::sqrt(cos_r_sq))
+    }
+}
+
+const AIR_REFRACTION_INDEX: f32 = 1.0;
 
 pub fn test_scene_intersect(
     orig: Vector3<f32>,
@@ -233,7 +266,30 @@ pub fn render_scene(
                 } else {
                     Vector3::from([0.0, 0.0, 0.0])
                 };
-            let mut color_vec = diffuse_color_vec + specular_color_vec + reflect_color_vec;
+            let refract_color_vec =
+                if let Some(Refract { index, albedo }) = info.material.refract {
+                    let refract_dir = refract(dir, info.normal, AIR_REFRACTION_INDEX, index);
+                    let refract_orig = if refract_dir.dot(&info.normal).is_sign_negative() {
+                        info.hit - info.normal * 1e-3
+                    } else {
+                        info.hit + info.normal * 1e-3
+                    };
+                    let raw_refract_color = render_scene(
+                        refract_orig,
+                        refract_dir,
+                        spheres,
+                        lights,
+                        recursion_limit - 1,
+                    );
+                    Vector3::from(raw_refract_color) * albedo
+                } else {
+                    Vector3::from([0.0, 0.0, 0.0])
+                };
+            let mut color_vec =
+                diffuse_color_vec +
+                specular_color_vec +
+                reflect_color_vec +
+                refract_color_vec;
             let max = color_vec.max();
             if max > 1.0 {
                 color_vec /= max;

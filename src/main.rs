@@ -10,13 +10,14 @@ const HEIGHT: usize = 768;
 const IVORY: Material = Material::color([0.4, 0.4, 0.3], 0.6).with_specular(50.0, 0.3).with_reflect(0.1);
 const RED_RUBBER: Material = Material::color([0.3, 0.1, 0.1], 0.9).with_specular(10.0, 0.1);
 const MIRROR: Material = Material::none().with_specular(1425.0, 10.0).with_reflect(0.8);
+const GLASS: Material = Material::none().with_specular(125.0, 0.5).with_reflect(0.1).with_refract(1.5, 0.8);
 
 fn main() -> Result<(), failure::Error> {
     let mut framebuffer = tiny_raytracer::Framebuffer::new(WIDTH, HEIGHT);
 
     let spheres = [
         Sphere::new(Vector3::from([-3.0,  0.0, -16.0]), 2.0, IVORY),
-        Sphere::new(Vector3::from([-1.0, -1.5, -12.0]), 2.0, MIRROR),
+        Sphere::new(Vector3::from([-1.0, -1.5, -12.0]), 2.0, GLASS),
         Sphere::new(Vector3::from([ 1.5, -0.5, -18.0]), 3.0, RED_RUBBER),
         Sphere::new(Vector3::from([ 7.0,  5.0, -18.0]), 4.0, MIRROR),
     ];
