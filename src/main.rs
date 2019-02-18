@@ -40,9 +40,10 @@ fn main() -> Result<(), failure::Error> {
                 let c = rc % WIDTH;
                 let rf = r as f32;
                 let cf = c as f32;
-                let x = (2.0 * (cf + 0.5) / wf - 1.0) * fov_tan * wf / hf;
-                let y = -(2.0 * (rf + 0.5) / hf - 1.0) * fov_tan;
-                let dir = Vector3::from([x, y, -1.0]);
+                let dir_x = (cf + 0.5) - wf / 2.0;
+                let dir_y = -(rf + 0.5) + hf / 2.0;
+                let dir_z = -hf / (2.0 * fov_tan);
+                let dir = Vector3::from([dir_x, dir_y, dir_z]);
                 object::render_scene(na::zero(), dir, &spheres, &lights, 4)
             })
             .collect()
