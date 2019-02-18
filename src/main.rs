@@ -2,7 +2,7 @@ use nalgebra as na;
 
 use na::Vector3;
 use rayon::prelude::*;
-use tiny_raytracer::{object::{self, Light, Sphere}, Material};
+use tiny_raytracer::{object::{self, Checkerboard, Light, Sphere}, Material, Object};
 
 const WIDTH: usize = 1024;
 const HEIGHT: usize = 768;
@@ -11,15 +11,23 @@ const IVORY: Material = Material::color([0.4, 0.4, 0.3], 0.6).with_specular(50.0
 const RED_RUBBER: Material = Material::color([0.3, 0.1, 0.1], 0.9).with_specular(10.0, 0.1);
 const MIRROR: Material = Material::none().with_specular(1425.0, 10.0).with_reflect(0.8);
 const GLASS: Material = Material::none().with_specular(125.0, 0.5).with_reflect(0.1).with_refract(1.5, 0.8);
+const CHECKER_WHITE: Material = Material::color([1.0, 1.0, 1.0], 0.4);
+const CHECKER_ORANGE: Material = Material::color([1.0, 0.7, 0.3], 0.4);
 
 fn main() -> Result<(), failure::Error> {
     let mut framebuffer = tiny_raytracer::Framebuffer::new(WIDTH, HEIGHT);
 
-    let spheres = [
-        Sphere::new(Vector3::from([-3.0,  0.0, -16.0]), 2.0, IVORY),
-        Sphere::new(Vector3::from([-1.0, -1.5, -12.0]), 2.0, GLASS),
-        Sphere::new(Vector3::from([ 1.5, -0.5, -18.0]), 3.0, RED_RUBBER),
-        Sphere::new(Vector3::from([ 7.0,  5.0, -18.0]), 4.0, MIRROR),
+    let objects: &[&dyn Object] = &[
+        &Sphere::new(Vector3::from([-3.0,  0.0, -16.0]), 2.0, IVORY),
+        &Sphere::new(Vector3::from([-1.0, -1.5, -12.0]), 2.0, GLASS),
+        &Sphere::new(Vector3::from([ 1.5, -0.5, -18.0]), 3.0, RED_RUBBER),
+        &Sphere::new(Vector3::from([ 7.0,  5.0, -18.0]), 4.0, MIRROR),
+        &Checkerboard::new(
+            Vector3::from([-10.0, -4.0, -30.0]),
+            (Vector3::from([0.0, 0.0, 2.0]), Vector3::from([2.0, 0.0, 0.0])),
+            (10, 10),
+            (CHECKER_WHITE, CHECKER_ORANGE),
+        ),
     ];
     let lights = [
         Light::new(Vector3::from([-20.0, 20.0,  20.0]), 1.5),
@@ -44,7 +52,7 @@ fn main() -> Result<(), failure::Error> {
                 let dir_y = -(rf + 0.5) + hf / 2.0;
                 let dir_z = -hf / (2.0 * fov_tan);
                 let dir = Vector3::from([dir_x, dir_y, dir_z]);
-                object::render_scene(na::zero(), dir, &spheres, &lights, 4)
+                object::render_scene(na::zero(), dir, objects, &lights, 4)
             })
             .collect()
     });

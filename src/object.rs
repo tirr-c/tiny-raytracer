@@ -83,7 +83,7 @@ pub struct IntersectionInfo {
     pub material: Material,
 }
 
-pub trait Object {
+pub trait Object: Sync {
     fn ray_intersect(&self, orig: Vector3<f32>, dir: Vector3<f32>) -> Option<IntersectionInfo>;
 }
 
@@ -140,6 +140,68 @@ impl Object for Sphere {
 }
 
 #[derive(Debug, Clone)]
+pub struct Checkerboard {
+    origin: Vector3<f32>,
+    cell_dir: (Vector3<f32>, Vector3<f32>),
+    dims: (u32, u32),
+    material: (Material, Material),
+}
+
+impl Checkerboard {
+    pub fn new(
+        origin: Vector3<f32>,
+        cell_dir: (Vector3<f32>, Vector3<f32>),
+        dims: (u32, u32),
+        material: (Material, Material),
+    ) -> Self {
+        Self {
+            origin,
+            cell_dir,
+            dims,
+            material,
+        }
+    }
+
+    fn normal(&self) -> Vector3<f32> {
+        self.cell_dir.0.cross(&self.cell_dir.1).normalize()
+    }
+}
+
+impl Object for Checkerboard {
+    fn ray_intersect(&self, orig: Vector3<f32>, dir: Vector3<f32>) -> Option<IntersectionInfo> {
+        let p = orig - self.origin;
+        let n = self.normal();
+        let dir = dir.normalize();
+        let neg_dist = n.dot(&p) / n.dot(&dir);
+        if neg_dist.is_sign_positive() {
+            return None;
+        }
+
+        let hit = p - neg_dist * dir;
+        let len_0 = hit.dot(&self.cell_dir.0) / self.cell_dir.0.dot(&self.cell_dir.0);
+        let len_1 = hit.dot(&self.cell_dir.1) / self.cell_dir.1.dot(&self.cell_dir.1);
+        if len_0 < 0.0 || len_1 < 0.0 || len_0 >= self.dims.0 as f32 || len_1 >= self.dims.1 as f32 {
+            return None;
+        }
+        let parity = len_0 as u32 + len_1 as u32;
+
+        let hit = hit + self.origin;
+        let material = if parity % 2 == 0 {
+            self.material.0.clone()
+        } else {
+            self.material.1.clone()
+        };
+
+        Some(IntersectionInfo {
+            dist: -neg_dist,
+            hit,
+            normal: n,
+            material,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Light {
     position: Vector3<f32>,
     intensity: f32,
@@ -159,11 +221,11 @@ const AIR_REFRACTION_INDEX: f32 = 1.0;
 pub fn test_scene_intersect(
     orig: Vector3<f32>,
     dir: Vector3<f32>,
-    spheres: &[Sphere],
+    objects: &[&dyn Object],
 ) -> Option<IntersectionInfo> {
-    let mut intersections: Vec<_> = spheres
+    let mut intersections: Vec<_> = objects
         .iter()
-        .filter_map(move |sphere| sphere.ray_intersect(orig, dir))
+        .filter_map(move |object| object.ray_intersect(orig, dir))
         .collect();
     intersections.sort_unstable_by(|a, b| b.dist.partial_cmp(&a.dist).unwrap());
     intersections.pop()
@@ -172,12 +234,12 @@ pub fn test_scene_intersect(
 pub fn render_scene(
     orig: Vector3<f32>,
     dir: Vector3<f32>,
-    spheres: &[Sphere],
+    objects: &[&dyn Object],
     lights: &[Light],
     recursion_limit: u32,
 ) -> [f32; 3] {
     if recursion_limit == 0 { None } else { Some(()) }
-        .and_then(|_| test_scene_intersect(orig, dir, spheres))
+        .and_then(|_| test_scene_intersect(orig, dir, objects))
         .and_then(|info| {
             let dir = dir.normalize();
             let filtered_lights: Vec<_> = lights
@@ -192,7 +254,7 @@ pub fn render_scene(
                     } else {
                         info.hit + info.normal * 1e-3
                     };
-                    let shadow_info = test_scene_intersect(shadow_orig, light_dir, spheres);
+                    let shadow_info = test_scene_intersect(shadow_orig, light_dir, objects);
                     match &shadow_info {
                         Some(shadow_info) if shadow_info.dist < light_dist => None,
                         _ => Some((light_dir, light)),
@@ -240,7 +302,7 @@ pub fn render_scene(
                     let raw_reflect_color = render_scene(
                         reflect_orig,
                         reflect_dir,
-                        spheres,
+                        objects,
                         lights,
                         recursion_limit - 1,
                     );
@@ -259,7 +321,7 @@ pub fn render_scene(
                     let raw_refract_color = render_scene(
                         refract_orig,
                         refract_dir,
-                        spheres,
+                        objects,
                         lights,
                         recursion_limit - 1,
                     );
