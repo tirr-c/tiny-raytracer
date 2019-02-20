@@ -1,8 +1,11 @@
-use nalgebra as na;
-
-use na::Vector3;
+use nalgebra::Vector3;
 use rayon::prelude::*;
-use tiny_raytracer::{object::{self, Checkerboard, Light, Sphere}, Material, Object};
+use tiny_raytracer::{
+    object::{Checkerboard, Object, Sphere},
+    Light,
+    Material,
+    render_scene,
+};
 
 const WIDTH: usize = 1024;
 const HEIGHT: usize = 768;
@@ -52,7 +55,7 @@ fn main() -> Result<(), failure::Error> {
                 let dir_y = -(rf + 0.5) + hf / 2.0;
                 let dir_z = -hf / (2.0 * fov_tan);
                 let dir = Vector3::from([dir_x, dir_y, dir_z]);
-                object::render_scene(na::zero(), dir, objects, &lights, 4)
+                render_scene(nalgebra::zero(), dir, objects, &lights, 4)
             })
             .collect()
     });
