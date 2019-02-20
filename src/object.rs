@@ -240,7 +240,7 @@ pub fn render_scene(
 ) -> [f32; 3] {
     if recursion_limit == 0 { None } else { Some(()) }
         .and_then(|_| test_scene_intersect(orig, dir, objects))
-        .and_then(|info| {
+        .map(|info| {
             let dir = dir.normalize();
             let filtered_lights: Vec<_> = lights
                 .iter()
@@ -338,7 +338,7 @@ pub fn render_scene(
             if max > 1.0 {
                 color_vec /= max;
             }
-            Some(color_vec.into())
+            color_vec.into()
         })
         .unwrap_or([0.2, 0.7, 0.8])
 }
