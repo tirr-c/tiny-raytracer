@@ -30,8 +30,13 @@ impl Framebuffer {
         self.height
     }
 
-    pub fn render_with<F: FnOnce() -> Vec<[f32; 3]>>(&mut self, f: F) -> Vec<[f32; 3]> {
-        std::mem::replace(&mut self.buf, f())
+    pub fn render_with<F: FnOnce() -> Vec<[f32; 3]>>(&mut self, f: F) -> Self {
+        let old = std::mem::replace(&mut self.buf, f());
+        Self {
+            width: self.width,
+            height: self.height,
+            buf: old,
+        }
     }
 
     pub fn buf(&self) -> &[[f32; 3]] {

@@ -9,4 +9,4 @@ pub use error::RenderError;
 pub use framebuffer::Framebuffer;
 pub use material::Material;
 
-pub use scene::{Light, render_scene};
+pub use scene::{Light, Scene};
